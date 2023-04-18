@@ -6,9 +6,6 @@
 
 using namespace std;
 
-
-matrix::matrix() {
-}
 //初始化矩阵，生成随机矩阵
 matrix::matrix(int row, int column) {
 	this->column = column;
@@ -17,7 +14,8 @@ matrix::matrix(int row, int column) {
 		vector<double> col(column, 1);
 		for (int t = 0; t < column; t++) {
 			//创建[-0.5,0.5)的随机数
-			col[t] = double((rand() % 10000)) / 10000 + 0.1;
+			col[t] = (double((rand() % 100)) / 100-0.5)*0.95;
+			//cout << col[t] << endl;
 		}
 		this->data.push_back(col);
 	}
@@ -36,6 +34,8 @@ matrix::matrix(int row, int column, double initial) {
 	}
 }
 
+matrix::matrix() {
+}
 
 matrix::~matrix() {
 }
@@ -85,6 +85,15 @@ vector<matrix> add_mat(vector<matrix> a, vector<matrix> b) {
 	return out;
 }
 
+matrix add_mat(double bias, matrix a) {
+	for (int i = 0; i < a.row; i++) {
+		for (int j = 0; j < a.column; j++) {
+			a.data[i][j] += bias;
+		}
+	}
+	return a;
+}
+
 matrix sub_mat(matrix a, matrix b) {
 	if (a.row == b.row and a.column == b.column) {
 		matrix r(a.row, a.column);
@@ -102,6 +111,7 @@ matrix sub_mat(matrix a, matrix b) {
 	}
 }
 
+//点乘
 matrix mul_mat(matrix a, matrix b) {
 	if (a.column != b.row) {
 		cout << " mul_mat error" << endl;
@@ -169,7 +179,7 @@ double sigmoid1(double x) {
 	return (1 / (1 + exp(-x)));
 }
 double ReLU(double x) {
-	if (x <= 0) 
+	if (x <= 0)
 		return 0;
 	else
 		return x;
@@ -209,7 +219,10 @@ matrix divide(matrix a, matrix b) {
 	matrix c(a.row, a.column);
 	for (int i = 0; i < b.row; i++) {
 		for (int j = 0; j < b.column; j++) {
-			c.data[i][j] = a.data[i][j] / b.data[i][j];
+			if (b.data[i][j] == 0)
+				c.data[i][j] = 0;
+			else
+				c.data[i][j] = a.data[i][j] / b.data[i][j];
 		}
 	}
 	return c;
@@ -228,7 +241,7 @@ matrix sub(double a, matrix b) {
 
 //卷积，stride为步长
 matrix convolution_mat(matrix target, matrix kernel, int stride) {
-	if (target.column < kernel.column or target.row < kernel.row or (target.column - kernel.column) % stride != 0 or (target.row - kernel.row) % stride != 0 ) {
+	if (target.column < kernel.column or target.row < kernel.row or (target.column - kernel.column) % stride != 0 or (target.row - kernel.row) % stride != 0) {
 		cout << "convolution error" << target.column << kernel.column << endl;
 		exit(0);
 	}
@@ -289,10 +302,10 @@ matrix DataGet1Col(int row, int column, string route) {
 		double d;
 		char c;
 		data >> d;
-		traindata.data[i*column][0] = d;
+		traindata.data[i * column][0] = d;
 		for (int j = 1; j < column; j++) {
 			data >> c >> d;
-			traindata.data[i*column+j][0] = d;
+			traindata.data[i * column + j][0] = d;
 		}
 	}
 	data.close();
@@ -331,7 +344,7 @@ matrix MergeVectorMatrix(vector<matrix> data) {
 		}
 	}
 	return out;
-	
+
 }
 
 matrix To_Matrix(double a[], int num) {
@@ -346,7 +359,15 @@ matrix To_Matrix(double a[], int num) {
 
 //误差分配
 vector<matrix> ErrorDistribute(vector<matrix> OutMat, matrix OneMat, matrix InError) {
+	//cout << "InError:" << endl;
+	//InError.show();
+	//cout << "OneMat:" << endl;
+	//OneMat.show();
 	vector<matrix> out;
+	//cout << "InError:" << endl;
+	//InError.show();
+	//cout << "OneMat:" << endl;
+	//OneMat.show();
 	matrix Intermediate = divide(InError, OneMat);
 	for (int i = 0; i < OutMat.size(); i++) {
 		matrix In = mul(Intermediate, OutMat[i]);
@@ -359,8 +380,8 @@ vector<matrix> ErrorDistribute(vector<matrix> OutMat, matrix OneMat, matrix InEr
 matrix ErrorCNNDist(matrix Error, matrix kernel, int stride) {
 	//将卷积核旋转180度
 	matrix FinalKernel(kernel.row, kernel.column);
-	for (int i = 0; i < kernel.row; i++) 
-		for (int j = 0; j < kernel.column; j++) 
+	for (int i = 0; i < kernel.row; i++)
+		for (int j = 0; j < kernel.column; j++)
 			FinalKernel.data[i][j] = kernel.data[kernel.row - i - 1][kernel.column - j - 1];
 	//为Error补0
 	matrix FinalError(Error.row + (kernel.row - 1) * 2, Error.column + (kernel.column - 1) * 2, 0);
@@ -370,5 +391,62 @@ matrix ErrorCNNDist(matrix Error, matrix kernel, int stride) {
 		}
 	//进行卷积
 	matrix out = convolution_mat(FinalError, FinalKernel, stride);
+	return out;
+}
+
+//归一化为0-1
+double NormalizationMat(matrix* a) {
+	double max = a->data[0][0];
+	double min = a->data[0][0];
+	for (int i = 0; i < a->row; i++)
+		for (int j = 0; j < a->column; j++)
+			if (a->data[i][j] > max)
+				max = a->data[i][j];
+			else if (a->data[i][j] < min)
+				min = a->data[i][j];
+	for (int i = 0; i < a->row; i++)
+		for (int j = 0; j < a->column; j++) {
+			a->data[i][j] = (a->data[i][j] - min) / (max - min);
+		}
+	return 0;
+}
+
+matrix FlodMat(vector<matrix> input) {
+	vector<matrix> result;
+	matrix out(input[0].row * input[0].column, 1);
+	int cout = 0;
+	for (int i = 0; i < input[0].row; i++) 
+		for (int j = 0; j < input[0].column; j++) {
+			out.data[cout][0] = input[0].data[i][j];
+			cout++;
+		}
+	result.push_back(out);
+	for (int t = 1; t < input.size(); t++) {
+		cout = 0;
+		matrix hid(input[t].row * input[t].column, 1);
+		for (int i = 0; i < input[t].row; i++)
+			for (int j = 0; j < input[t].column; j++) {
+				hid.data[cout][0] = input[t].data[i][j];
+				cout++;
+			}
+		result.push_back(hid);
+	}
+	out = MergeVectorMatrix(result);
+	return out;
+}
+
+vector<matrix> ReveseFlodMat(int row, int column, matrix input) {
+	vector<matrix> out;
+	int cont = input.row;
+	while (cont) {
+		matrix a(row, column);
+		for (int i = 0; i < row; i++) {
+			for (int j = 0; j < column; j++) {
+				a.data[i][j] = input.data[input.row - cont][0];
+				cont--;
+			}
+		}
+		out.push_back(a);
+	}
 	return out;
 }
